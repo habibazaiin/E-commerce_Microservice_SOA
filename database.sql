@@ -80,7 +80,7 @@ INSERT INTO tax_rates (region, tax_rate) VALUES
 
 CREATE USER 'ecommerce_user'@'localhost' IDENTIFIED BY '123456';
 
-GRANT SELECT, INSERT, UPDATE ON ecommerce_system.* 
+GRANT SELECT, INSERT, Delete, UPDATE ON ecommerce_system.* 
 TO 'ecommerce_user'@'localhost';
 
 FLUSH PRIVILEGES;
