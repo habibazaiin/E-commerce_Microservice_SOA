@@ -1,8 +1,3 @@
-"""
-Inventory Service - إدارة المخزون
-Port: 5002
-Database: ecommerce_system.inventory
-"""
 
 from flask import Flask, request, jsonify
 import mysql.connector
@@ -49,12 +44,12 @@ except Error as e:
 
 
 def get_conn():
-    """Get a connection from the pool."""
+    
     return pool.get_connection()
 
 
 def decimal_to_native(value):
-    """Convert Decimal to float."""
+    
     if value is None:
         return None
     if isinstance(value, Decimal):
@@ -80,21 +75,7 @@ def row_to_item(row):
 
 @app.route('/inventory', methods=['GET'])
 def list_products():
-    """
-    Get all products
     
-    Response:
-        [
-            {
-                "product_id": 1,
-                "product_name": "Laptop",
-                "quantity_available": 50,
-                "unit_price": 999.99,
-                "last_updated": "2025-12-13T10:30:00"
-            },
-            ...
-        ]
-    """
     logger.info("📦 GET /inventory - Listing all products")
     
     try:
@@ -122,20 +103,7 @@ def list_products():
 
 @app.route('/inventory/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    """
-    Get single product by ID
     
-    Used by: Order Service to check product availability
-    
-    Response:
-        {
-            "product_id": 1,
-            "product_name": "Laptop",
-            "quantity_available": 50,
-            "unit_price": 999.99,
-            "last_updated": "2025-12-13T10:30:00"
-        }
-    """
     logger.info(f"🔍 GET /inventory/{product_id} - Checking product")
     
     try:
@@ -167,14 +135,7 @@ def get_product(product_id):
 
 @app.route('/inventory/<int:product_id>', methods=['PUT', 'PATCH'])
 def update_product(product_id):
-    """
-    Update product inventory
     
-    Request Body:
-        {
-            "quantity_available": 45
-        }
-    """
     logger.info(f"📝 PUT/PATCH /inventory/{product_id} - Updating product")
     
     data = request.get_json(force=True, silent=True)

@@ -1,307 +1,374 @@
 from flask import Flask, request, jsonify
 import requests
+import mysql.connector
+from mysql.connector import Error
 from datetime import datetime
 import logging
 from config import Config
 
-# إنشاء تطبيق Flask
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# إعداد الـ Logging عشان نعرف إيه اللي بيحصل
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# Database Configuration
+# ============================================================
+
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "ecommerce_user",
+    "password": "123456",
+    "database": "ecommerce_system",
+    "autocommit": False
+}
+
+def get_db_connection():
+    """Create database connection"""
+    return mysql.connector.connect(**DB_CONFIG)
 
 # ============================================================
-# الجزء 2: Counter لتوليد Order IDs
-# ============================================================
-
-# متغير عالمي لتوليد Order IDs فريدة
-order_counter = 1000
-
-def generate_order_id():
-    """
-    دالة لتوليد Order ID فريد
-    
-    Returns:
-        str: Order ID في شكل ORD-1001, ORD-1002, etc.
-    """
-    global order_counter
-    order_counter += 1
-    order_id = f"ORD-{order_counter}"
-    logger.info(f"Generated new Order ID: {order_id}")
-    return order_id
-
-
-# ============================================================
-# الجزء 3: دالة التحقق من المدخلات
+# دالة التحقق من المدخلات
 # ============================================================
 
 def validate_order_input(data):
-    """
-    التحقق من صحة البيانات الواردة
-    
-    Args:
-        data (dict): البيانات الواردة من JSP
-        
-    Returns:
-        tuple: (is_valid, error_message)
-        
-    مثال:
-        >>> validate_order_input({"customer_id": 1, "products": []})
-        (False, "Products list cannot be empty")
-    """
-    # التحقق من وجود customer_id
     if 'customer_id' not in data:
         return False, "Missing required field: customer_id"
     
-    # التحقق من أن customer_id رقم صحيح
     if not isinstance(data['customer_id'], int) or data['customer_id'] <= 0:
         return False, "Invalid customer_id: must be a positive integer"
     
-    # التحقق من وجود products
     if 'products' not in data:
         return False, "Missing required field: products"
     
-    # التحقق من أن products مش فاضي
     if not isinstance(data['products'], list) or len(data['products']) == 0:
         return False, "Products list cannot be empty"
     
-    # التحقق من كل منتج في القائمة
     for idx, product in enumerate(data['products']):
-        # كل منتج لازم يكون فيه product_id
         if 'product_id' not in product:
             return False, f"Product at index {idx} missing product_id"
         
-        # product_id لازم يكون رقم موجب
         if not isinstance(product['product_id'], int) or product['product_id'] <= 0:
             return False, f"Invalid product_id at index {idx}"
         
-        # كل منتج لازم يكون فيه quantity
         if 'quantity' not in product:
             return False, f"Product at index {idx} missing quantity"
         
-        # quantity لازم يكون رقم موجب
         if not isinstance(product['quantity'], int) or product['quantity'] <= 0:
             return False, f"Invalid quantity at index {idx}: must be positive"
     
-    # لو كل حاجة تمام
     return True, None
 
-
 # ============================================================
-# الجزء 4: دالة التحقق من المخزون
+# دالة التحقق من المخزون (مع جلب الأسعار)
 # ============================================================
 
 def check_inventory(products):
-    """
-    التحقق من توفر المنتجات في المخزن
-    
-    Args:
-        products (list): قائمة المنتجات [{"product_id": 1, "quantity": 2}, ...]
-        
-    Returns:
-        tuple: (success, data_or_error)
-        
-    Process:
-        1. نكلم Inventory Service لكل منتج
-        2. نتحقق إن الكمية المطلوبة متوفرة
-        3. نجمع معلومات كل المنتجات
-    """
+   
     inventory_url = app.config['INVENTORY_SERVICE_URL']
     inventory_items = []
     
-    logger.info(f"Checking inventory for {len(products)} products...")
+    logger.info(f"🔍 Checking inventory for {len(products)} products...")
     
     for product in products:
         product_id = product['product_id']
         requested_qty = product['quantity']
         
         try:
-            # إرسال طلب للـ Inventory Service
-            # ملاحظة: الـ endpoint الصحيح هو /inventory/<id> مش /api/inventory/check/<id>
             response = requests.get(
                 f"{inventory_url}/inventory/{product_id}",
-                timeout=5  # الانتظار 5 ثواني كحد أقصى
+                timeout=30
             )
             
-            # التحقق من نجاح الطلب
             if response.status_code != 200:
-                logger.error(f"Inventory service error for product {product_id}: {response.status_code}")
+                logger.error(f"❌ Inventory service error for product {product_id}: {response.status_code}")
                 return False, f"Failed to check inventory for product {product_id}"
             
-            # تحويل الرد لـ JSON
             inventory_data = response.json()
-            
-            # التحقق من توفر الكمية المطلوبة
             available_qty = inventory_data.get('quantity_available', 0)
+            unit_price = inventory_data.get('unit_price', 0.0)
+            product_name = inventory_data.get('product_name', 'Unknown')
             
+            logger.info(f"  ✓ Product {product_id}: {product_name}")
+            logger.info(f"    Price: {unit_price}, Available: {available_qty}, Requested: {requested_qty}")
+            
+            # التحقق من توفر الكمية
             if available_qty < requested_qty:
-                logger.warning(f"Insufficient stock for product {product_id}: requested {requested_qty}, available {available_qty}")
+                logger.warning(f"⚠️ Insufficient stock for product {product_id}")
                 return False, f"Insufficient stock for product {product_id}. Available: {available_qty}, Requested: {requested_qty}"
             
-            # إضافة معلومات المنتج للقائمة
+            # ✅ حفظ كل البيانات مع unit_price
             inventory_items.append({
                 'product_id': product_id,
-                'product_name': inventory_data.get('product_name'),
+                'product_name': product_name,
                 'quantity': requested_qty,
-                'unit_price': inventory_data.get('unit_price')
+                'unit_price': unit_price  # ✅ مهم جداً!
             })
             
-            logger.info(f"Product {product_id} available: {available_qty} units")
-            
         except requests.exceptions.Timeout:
-            logger.error(f"Timeout while checking inventory for product {product_id}")
+            logger.error(f"⏱️ Timeout checking inventory for product {product_id}")
             return False, f"Inventory service timeout for product {product_id}"
         
         except requests.exceptions.ConnectionError:
-            logger.error(f"Cannot connect to Inventory service for product {product_id}")
-            return False, "Cannot connect to Inventory service. Please ensure it's running on port 5002"
+            logger.error(f"🔌 Cannot connect to Inventory service")
+            return False, "Cannot connect to Inventory service. Ensure it's running on port 5002"
         
         except Exception as e:
-            logger.error(f"Unexpected error checking inventory: {str(e)}")
+            logger.error(f"❌ Error checking inventory: {str(e)}")
             return False, f"Error checking inventory: {str(e)}"
     
+    logger.info(f"✅ All products available and prices fetched")
     return True, inventory_items
 
-
 # ============================================================
-# الجزء 5: دالة حساب الأسعار
+# دالة حساب الأسعار (مع unit_price)
 # ============================================================
 
-def calculate_pricing(products):
-    """
-    حساب الأسعار النهائية عن طريق Pricing Service
+def calculate_pricing(inventory_items, region='Cairo'):
     
-    Args:
-        products (list): قائمة المنتجات
-        
-    Returns:
-        tuple: (success, pricing_data_or_error)
-        
-    الـ Pricing Service بيحسب:
-        - الأسعار الأساسية
-        - الخصومات
-        - الضرائب
-        - الإجمالي النهائي
-    """
     pricing_url = app.config['PRICING_SERVICE_URL']
     
-    # تجهيز البيانات للإرسال
-    payload = {"products": products}
     
-    logger.info(f"Calculating pricing for order...")
+    payload = {
+        "products": inventory_items,  
+        "region": region
+    }
+    
+    logger.info(f"💰 Calculating pricing...")
+    logger.info(f"📤 Payload: {payload}")
     
     try:
-        # إرسال POST request للـ Pricing Service
         response = requests.post(
             f"{pricing_url}/api/pricing/calculate",
             json=payload,
-            timeout=5,
+            timeout=30,
             headers={'Content-Type': 'application/json'}
         )
         
+        logger.info(f"📥 Pricing service response code: {response.status_code}")
+        
         if response.status_code != 200:
-            logger.error(f"Pricing service error: {response.status_code}")
-            return False, "Failed to calculate pricing"
+            logger.error(f"❌ Pricing service error: {response.status_code}")
+            logger.error(f"Response: {response.text}")
+            return False, f"Pricing service error: {response.text}"
         
         pricing_data = response.json()
-        logger.info(f"Pricing calculated successfully. Total: {pricing_data.get('total_amount')}")
+        
+        logger.info(f"✅ Pricing calculated successfully")
+        logger.info(f"  Subtotal: {pricing_data.get('subtotal', 0)}")
+        logger.info(f"  Discount: {pricing_data.get('discount', 0)}")
+        logger.info(f"  Tax: {pricing_data.get('tax', 0)}")
+        logger.info(f"  Total: {pricing_data.get('total_amount', 0)}")
         
         return True, pricing_data
         
     except requests.exceptions.Timeout:
-        logger.error("Timeout while calculating pricing")
+        logger.error("⏱️ Timeout calculating pricing")
         return False, "Pricing service timeout"
     
     except requests.exceptions.ConnectionError:
-        logger.error("Cannot connect to Pricing service")
-        return False, "Cannot connect to Pricing service. Please ensure it's running on port 5003"
+        logger.error("🔌 Cannot connect to Pricing service")
+        return False, "Cannot connect to Pricing service. Ensure it's running on port 5003"
     
     except Exception as e:
-        logger.error(f"Unexpected error calculating pricing: {str(e)}")
+        logger.error(f"❌ Error calculating pricing: {str(e)}")
         return False, f"Error calculating pricing: {str(e)}"
 
+# ============================================================
+# حفظ الطلب في Database
+# ============================================================
+
+def save_order_to_database(customer_id, pricing_data, inventory_items):
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        conn.start_transaction()
+        
+        logger.info(f"💾 Saving order to database...")
+        
+        # استخراج البيانات
+        subtotal = pricing_data.get('subtotal', 0.0)
+        discount = pricing_data.get('discount', 0.0)
+        tax = pricing_data.get('tax', 0.0)
+        total_amount = pricing_data.get('total_amount', 0.0)
+        
+        logger.info(f"📊 Order financials:")
+        logger.info(f"  Subtotal: {subtotal}")
+        logger.info(f"  Discount: {discount}")
+        logger.info(f"  Tax: {tax}")
+        logger.info(f"  Total: {total_amount}")
+        
+        # التحقق من البيانات
+        if total_amount == 0:
+            logger.error("❌ Total amount is 0! Pricing data invalid!")
+            logger.error(f"Pricing data: {pricing_data}")
+            return False, "Invalid pricing data: total amount is 0"
+        
+        # 1. حفظ Order
+        cursor.execute("""
+            INSERT INTO orders 
+            (customer_id, total_amount, subtotal, discount, tax, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            customer_id,
+            total_amount,
+            subtotal,
+            discount,
+            tax,
+            'confirmed'
+        ))
+        
+        order_id = cursor.lastrowid
+        logger.info(f"✓ Order {order_id} record created")
+        
+        # 2. حفظ Order Items
+        items = pricing_data.get('items', [])
+        
+        if not items:
+            logger.error("❌ No items in pricing data!")
+            return False, "No items in pricing response"
+        
+        logger.info(f"📦 Saving {len(items)} order items...")
+        
+        for item in items:
+            product_id = item.get('product_id')
+            quantity = item.get('quantity')
+            unit_price = item.get('unit_price')
+            discounted_price = item.get('discounted_price')
+            discount_pct = item.get('discount_percentage', 0.0)
+            line_total = item.get('line_total')
+            
+            logger.info(f"  Item: Product {product_id}, Qty {quantity}, Price {unit_price}, Total {line_total}")
+            
+            cursor.execute("""
+                INSERT INTO order_items
+                (order_id, product_id, quantity, unit_price, discounted_price, 
+                 discount_percentage, line_total)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                order_id,
+                product_id,
+                quantity,
+                unit_price,
+                discounted_price,
+                discount_pct,
+                line_total
+            ))
+        
+        logger.info(f"✓ {len(items)} items saved")
+        
+        # 3. تحديث المخزون
+        logger.info(f"📉 Updating inventory...")
+        for item in inventory_items:
+            cursor.execute("""
+                UPDATE inventory
+                SET quantity_available = quantity_available - %s,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE product_id = %s
+            """, (item['quantity'], item['product_id']))
+            
+            logger.info(f"  ✓ Product {item['product_id']}: -{item['quantity']} units")
+        
+        # 4. Commit
+        conn.commit()
+        logger.info(f"✅ Order {order_id} saved and committed successfully!")
+        
+        cursor.close()
+        conn.close()
+        
+        return True, order_id
+        
+    except Error as e:
+        if conn:
+            conn.rollback()
+            logger.error(f"❌ Database error, rolled back: {e}")
+        return False, f"Database error: {str(e)}"
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            logger.error(f"❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"Unexpected error: {str(e)}"
+    
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
 
 # ============================================================
-# الجزء 6: الـ Endpoint الرئيسي - إنشاء الطلب
+# الـ Endpoint الرئيسي - إنشاء الطلب
 # ============================================================
 
 @app.route('/api/orders/create', methods=['POST'])
 def create_order():
-    """
-    نقطة النهاية الرئيسية لإنشاء طلب جديد
-    
-    Request Body:
-        {
-            "customer_id": 1,
-            "products": [
-                {"product_id": 1, "quantity": 2},
-                {"product_id": 3, "quantity": 1}
-            ]
-        }
-    
-    Response:
-        {
-            "success": true,
-            "order_id": "ORD-1001",
-            "customer_id": 1,
-            "products": [...],
-            "pricing": {...},
-            "timestamp": "2025-12-11 10:30:45",
-            "status": "confirmed"
-        }
-    """
-    logger.info("=" * 50)
-    logger.info("NEW ORDER REQUEST RECEIVED")
-    logger.info("=" * 50)
+    logger.info("=" * 60)
+    logger.info("🛒 NEW ORDER REQUEST RECEIVED")
+    logger.info("=" * 60)
     
     try:
-        # الخطوة 1: الحصول على البيانات من JSP
+        # 1. الحصول على البيانات
         data = request.get_json()
-        logger.info(f"Received order data: {data}")
+        logger.info(f"📥 Received data: {data}")
         
-        # الخطوة 2: التحقق من صحة البيانات
+        # 2. التحقق من المدخلات
         is_valid, error_msg = validate_order_input(data)
         if not is_valid:
-            logger.warning(f"Invalid input: {error_msg}")
-            return jsonify({
-                'success': False,
-                'error': error_msg
-            }), 400
+            logger.warning(f"❌ Invalid input: {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 400
         
-        # الخطوة 3: التحقق من المخزون
+        # 3. التحقق من المخزون (وجلب الأسعار)
         inventory_success, inventory_result = check_inventory(data['products'])
         if not inventory_success:
-            logger.warning(f"Inventory check failed: {inventory_result}")
+            logger.warning(f"❌ Inventory check failed: {inventory_result}")
             return jsonify({
                 'success': False,
                 'error': inventory_result,
                 'stage': 'inventory_check'
             }), 400
         
-        # الخطوة 4: حساب الأسعار
-        pricing_success, pricing_result = calculate_pricing(data['products'])
+        # 4. حساب الأسعار (مع البيانات الكاملة)
+        pricing_success, pricing_result = calculate_pricing(
+            inventory_result,  # ✅ فيها unit_price!
+            region='Cairo'
+        )
+        
         if not pricing_success:
-            logger.warning(f"Pricing calculation failed: {pricing_result}")
+            logger.warning(f"❌ Pricing failed: {pricing_result}")
             return jsonify({
                 'success': False,
                 'error': pricing_result,
                 'stage': 'pricing_calculation'
             }), 400
         
-        # الخطوة 5: توليد Order ID و Timestamp
-        order_id = generate_order_id()
+        # 5. حفظ في Database
+        save_success, order_id_or_error = save_order_to_database(
+            data['customer_id'], 
+            pricing_result, 
+            inventory_result
+        )
+        
+        if not save_success:
+            logger.error(f"❌ Failed to save: {order_id_or_error}")
+            return jsonify({
+                'success': False,
+                'error': f"Failed to save order: {order_id_or_error}",
+                'stage': 'database_save'
+            }), 500
+        
+        # 6. تجميع الرد النهائي
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # الخطوة 6: تجميع الرد النهائي
         response_data = {
             'success': True,
-            'order_id': order_id,
+            'order_id': order_id_or_error,
             'customer_id': data['customer_id'],
             'products': inventory_result,
             'pricing': pricing_result,
@@ -310,75 +377,99 @@ def create_order():
             'message': 'Order created successfully'
         }
         
-        logger.info(f"✓ Order {order_id} created successfully!")
-        logger.info("=" * 50)
+        logger.info("=" * 60)
+        logger.info(f"✅ ORDER {order_id_or_error} COMPLETED SUCCESSFULLY!")
+        logger.info("=" * 60)
         
         return jsonify(response_data), 201
         
     except Exception as e:
-        logger.error(f"Unexpected error in create_order: {str(e)}")
+        logger.error(f"❌ Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'Internal server error',
             'details': str(e)
         }), 500
 
-
 # ============================================================
-# الجزء 7: Endpoint لاسترجاع تفاصيل الطلب
+# استرجاع Order من Database
 # ============================================================
 
-@app.route('/api/orders/<order_id>', methods=['GET'])
+@app.route('/api/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
-    """
-    استرجاع تفاصيل طلب معين
+    """استرجاع Order من Database"""
+    logger.info(f"🔍 Retrieving order {order_id}")
     
-    في التطبيق الحقيقي ده هيجي من Database
-    هنا بنرجع بيانات تجريبية
-    """
-    logger.info(f"Retrieving order details for: {order_id}")
-    
-    # في الواقع هنجيب البيانات دي من Database
-    # لكن للتجربة هنرجع بيانات ثابتة
-    mock_order = {
-        'order_id': order_id,
-        'customer_id': 1,
-        'status': 'confirmed',
-        'total_amount': 1099.98,
-        'created_at': '2025-12-11 10:30:45'
-    }
-    
-    return jsonify(mock_order), 200
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        cursor.execute("""
+            SELECT oi.*, i.product_name
+            FROM order_items oi
+            JOIN inventory i ON oi.product_id = i.product_id
+            WHERE oi.order_id = %s
+        """, (order_id,))
+        items = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Convert datetime to string
+        if order.get('created_at'):
+            order['created_at'] = order['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Convert Decimal to float
+        from decimal import Decimal
+        for key in list(order.keys()):
+            if isinstance(order[key], Decimal):
+                order[key] = float(order[key])
+        
+        for item in items:
+            for key in list(item.keys()):
+                if isinstance(item[key], Decimal):
+                    item[key] = float(item[key])
+        
+        order['items'] = items
+        
+        return jsonify(order), 200
+        
+    except Error as e:
+        logger.error(f"Database error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================
-# الجزء 8: Health Check Endpoint
+# Health Check
 # ============================================================
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """
-    نقطة فحص صحة الخدمة
-    مفيدة للتأكد إن الـ Service شغال
-    """
     return jsonify({
         'status': 'healthy',
         'service': 'Order Service',
         'port': Config.PORT
     }), 200
 
-
 # ============================================================
-# الجزء 9: تشغيل الـ Service
+# تشغيل الـ Service
 # ============================================================
 
 if __name__ == '__main__':
-    logger.info("=" * 50)
-    logger.info("STARTING ORDER SERVICE")
-    logger.info(f"Port: {Config.PORT}")
-    logger.info(f"Pricing Service URL: {Config.PRICING_SERVICE_URL}")
-    logger.info(f"Inventory Service URL: {Config.INVENTORY_SERVICE_URL}")
-    logger.info("=" * 50)
+    logger.info("=" * 60)
+    logger.info("🚀 STARTING ORDER SERVICE")
+    logger.info(f"📍 Port: {Config.PORT}")
+    logger.info(f"🗄️  Database: ecommerce_system")
+    logger.info(f"📦 Inventory URL: {Config.INVENTORY_SERVICE_URL}")
+    logger.info(f"💰 Pricing URL: {Config.PRICING_SERVICE_URL}")
+    logger.info("=" * 60)
     
     app.run(
         host=Config.HOST,

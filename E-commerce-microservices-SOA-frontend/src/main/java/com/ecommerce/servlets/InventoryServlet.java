@@ -18,22 +18,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * InventoryServlet - جلب قائمة المنتجات من Inventory Service
- *
- * يستخدم في index.jsp لعرض المنتجات المتاحة
- *
- * @author Your Name
- */
+
 @WebServlet("/getProducts")
 public class InventoryServlet extends HttpServlet {
 
-    // Inventory Service URL - يرجع Array مباشرة
+
     private static final String INVENTORY_SERVICE_URL = "http://localhost:5002/inventory";
 
-    /**
-     * معالجة GET requests - جلب قائمة المنتجات
-     */
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -43,18 +35,17 @@ public class InventoryServlet extends HttpServlet {
         System.out.println("========================================");
 
         try {
-            // جلب المنتجات من Inventory Service
+
             String productsJson = sendGetRequest(INVENTORY_SERVICE_URL);
             System.out.println("Products received: " + productsJson);
 
-            // تحويل JSON إلى List
             Gson gson = new Gson();
 
-            // ✅ التعديل المهم: الـ Service بيرجع JsonArray مباشرة مش Object
+
             JsonArray productsArray = gson.fromJson(productsJson, JsonArray.class);
             List<Product> products = new ArrayList<>();
 
-            // تحويل JSON إلى Java Objects
+
             for (int i = 0; i < productsArray.size(); i++) {
                 JsonObject productJson = productsArray.get(i).getAsJsonObject();
 
@@ -67,20 +58,20 @@ public class InventoryServlet extends HttpServlet {
                 products.add(product);
             }
 
-            // إرسال البيانات لـ JSP
+
             request.setAttribute("products", products);
             request.setAttribute("success", true);
 
             System.out.println("✓ " + products.size() + " products loaded successfully");
 
-            // إرسال البيانات لـ index.jsp
+
             request.getRequestDispatcher("index.jsp").forward(request, response);
 
         } catch (Exception e) {
             System.err.println("ERROR in InventoryServlet: " + e.getMessage());
             e.printStackTrace();
 
-            // في حالة الخطأ - عرض رسالة خطأ
+
             request.setAttribute("products", new ArrayList<>());
             request.setAttribute("success", false);
             request.setAttribute("error", "Cannot connect to Inventory Service: " + e.getMessage());
@@ -89,13 +80,7 @@ public class InventoryServlet extends HttpServlet {
         }
     }
 
-    /**
-     * إرسال GET request لـ Flask Service
-     *
-     * @param urlString URL الخدمة
-     * @return رد الخدمة
-     * @throws IOException في حالة فشل الاتصال
-     */
+
     private String sendGetRequest(String urlString) throws IOException {
         URL url = new URL(urlString);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -125,16 +110,14 @@ public class InventoryServlet extends HttpServlet {
         }
     }
 
-    /**
-     * Product Class - لتمثيل المنتج
-     */
+
     public static class Product {
         private int productId;
         private String productName;
         private int quantityAvailable;
         private double unitPrice;
 
-        // Getters and Setters
+
         public int getProductId() {
             return productId;
         }

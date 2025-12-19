@@ -20,7 +20,7 @@
     <!-- Navigation -->
     <nav class="nav">
         <ul>
-            <li><a href="index.jsp">الرئيسية</a></li>
+            <li><a href="getProducts">الرئيسية</a></li>
             <li><a href="getProducts">المنتجات</a></li>
             <li><a href="checkout.jsp">سلة التسوق</a></li>
         </ul>
@@ -31,8 +31,16 @@
         Boolean success = (Boolean) request.getAttribute("success");
 
         if (success != null && success && orderData != null) {
-            // استخراج البيانات
-            String orderId = orderData.get("order_id").getAsString();
+            // ✅ استخراج order_id كـ INT أو STRING
+            String orderId;
+            try {
+                // محاولة قراءته كـ INT أولاً
+                orderId = String.valueOf(orderData.get("order_id").getAsInt());
+            } catch (Exception e) {
+                // لو فشل، نقرأه كـ STRING
+                orderId = orderData.get("order_id").getAsString();
+            }
+
             int customerId = orderData.get("customer_id").getAsInt();
             String timestamp = orderData.get("timestamp").getAsString();
             String status = orderData.get("status").getAsString();
@@ -50,7 +58,7 @@
 
     <!-- Success Animation -->
     <div class="form-section" style="text-align: center;">
-        <div class="success-icon">✅</div>
+        <div class="success-icon" style="font-size: 5em;">✅</div>
         <h2 style="color: #10b981; margin-top: 20px; font-size: 2em;">
             تم إنشاء طلبك بنجاح!
         </h2>
@@ -66,8 +74,8 @@
         <div class="summary-item">
             <strong>رقم الطلب:</strong>
             <span style="color: #667eea; font-size: 1.2em; font-weight: bold;">
-                    <%= orderId %>
-                </span>
+                #<%= orderId %>
+            </span>
         </div>
 
         <div class="summary-item">
@@ -83,8 +91,8 @@
         <div class="summary-item">
             <strong>الحالة:</strong>
             <span style="color: #10b981; font-weight: bold;">
-                    <%= status.equals("confirmed") ? "✅ مؤكد" : status %>
-                </span>
+                <%= status.equals("confirmed") ? "✅ مؤكد" : status %>
+            </span>
         </div>
     </div>
 
@@ -115,37 +123,10 @@
         <% } %>
     </div>
 
-    <!-- Pricing Summary -->
-    <div class="order-summary">
-        <h2>💰 ملخص الأسعار</h2>
-
-        <div class="summary-item">
-            <strong>المجموع الفرعي:</strong>
-            <span><%= String.format("%.2f", subtotal) %> جنيه</span>
-        </div>
-
-        <% if (discount > 0) { %>
-        <div class="summary-item" style="color: #10b981;">
-            <strong>الخصم:</strong>
-            <span>- <%= String.format("%.2f", discount) %> جنيه</span>
-        </div>
-        <% } %>
-
-        <% if (tax > 0) { %>
-        <div class="summary-item">
-            <strong>الضريبة:</strong>
-            <span>+ <%= String.format("%.2f", tax) %> جنيه</span>
-        </div>
-        <% } %>
-
-        <div class="summary-total">
-            الإجمالي النهائي: <%= String.format("%.2f", total) %> جنيه
-        </div>
-    </div>
 
     <!-- Actions -->
     <div class="form-section" style="text-align: center;">
-        <a href="index.jsp" class="btn btn-success" style="margin-left: 15px; font-size: 1.1em; padding: 15px 30px;">
+        <a href="getProducts" class="btn btn-success" style="margin-left: 15px; font-size: 1.1em; padding: 15px 30px;">
             🛒 طلب جديد
         </a>
         <button onclick="window.print()" class="btn" style="font-size: 1.1em; padding: 15px 30px;">
@@ -156,10 +137,9 @@
     <script>
         // مسح السلة بعد نجاح الطلب
         localStorage.removeItem('cart');
-
-        // عرض رسالة نجاح
         console.log('✅ Order completed successfully!');
         console.log('Order ID: <%= orderId %>');
+        console.log('🗑️ Cart cleared from localStorage');
     </script>
 
     <%
@@ -189,7 +169,7 @@
             <a href="checkout.jsp" class="btn" style="margin-left: 15px;">
                 🔄 المحاولة مرة أخرى
             </a>
-            <a href="index.jsp" class="btn btn-secondary">
+            <a href="getProducts" class="btn btn-secondary">
                 🏠 العودة للرئيسية
             </a>
         </div>

@@ -86,66 +86,85 @@
     </div>
 </div>
 
-<script>
-    // جلب السلة من LocalStorage
+<script type="text/javascript">
+
+
     let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
-    // عرض محتويات السلة
+
     function displayCart() {
         const cartDisplay = document.getElementById('cartDisplay');
 
-        if (cart.length === 0) {
+
+        if (!cart || cart.length === 0) {
             cartDisplay.innerHTML = `
-                    <div class="alert alert-info">
-                        ⚠️ السلة فارغة!
-                        <br><br>
-                        <a href="index.jsp" class="btn">العودة للمنتجات</a>
-                    </div>
-                `;
+                <div class="alert alert-info">
+                    ⚠️ السلة فارغة!
+                    <br><br>
+                    <a href="index.jsp" class="btn">العودة للمنتجات</a>
+                </div>
+            `;
             return;
         }
 
-        let html = '<div class="order-summary">';
-        html += '<h2>📦 ملخص الطلب</h2>';
-
         let total = 0;
+        let html = `
+            <div class="order-summary">
+                <h2>📦 ملخص الطلب</h2>
+        `;
 
-        cart.forEach((item, index) => {
-            let itemTotal = item.price * item.quantity;
+        cart.forEach(function (item, index) {
+
+            let price = Number(item.price);
+            let quantity = Number(item.quantity);
+
+            if (isNaN(price) || isNaN(quantity)) {
+                console.error("❌ بيانات غير صالحة:", item);
+                return;
+            }
+
+            let itemTotal = price * quantity;
             total += itemTotal;
 
             html += `
-                    <div class="summary-item">
-                        <div>
-                            <strong>${item.productName}</strong>
-                            <br>
-                            <small>السعر: ${item.price.toFixed(2)} × ${item.quantity}</small>
-                        </div>
-                        <div style="text-align: left;">
-                            <strong>${itemTotal.toFixed(2)} جنيه</strong>
-                            <br>
-                            <button type="button"
-                                    class="btn btn-danger"
-                                    style="padding: 5px 10px; font-size: 0.9em; margin-top: 5px;"
-                                    onclick="removeItem(${index})">
-                                🗑️ حذف
-                            </button>
-                        </div>
+                <div class="summary-item">
+                    <div>
+                        <strong>\${item.productName}</strong>
+                        <br>
+                        <small>السعر: \${price.toFixed(2)} × \${quantity}</small>
                     </div>
-                `;
+                    <div style="text-align:left">
+                        <strong>\${itemTotal.toFixed(2)} جنيه</strong>
+                        <br>
+                        <button type="button"
+                                class="btn btn-danger remove-btn"
+                                data-index="\${index}"
+                                style="padding:5px 10px;font-size:0.9em;margin-top:5px">
+                            🗑️ حذف
+                        </button>
+                    </div>
+                </div>
+            `;
         });
 
         html += `
                 <div class="summary-total">
-                    الإجمالي: ${total.toFixed(2)} جنيه
+                    الإجمالي: \${total.toFixed(2)} جنيه
                 </div>
-            `;
-        html += '</div>';
+            </div>
+        `;
 
         cartDisplay.innerHTML = html;
+
+
+        document.querySelectorAll('.remove-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                removeItem(this.dataset.index);
+            });
+        });
     }
 
-    // حذف عنصر من السلة
+
     function removeItem(index) {
         if (confirm('هل تريد حذف هذا المنتج؟')) {
             cart.splice(index, 1);
@@ -154,27 +173,24 @@
         }
     }
 
-    // التحقق وإرسال الطلب
+
     function validateAndSubmit() {
-        if (cart.length === 0) {
+        if (!cart || cart.length === 0) {
             alert('❌ السلة فارغة! أضف منتجات أولاً.');
             return false;
         }
 
-        // تحضير بيانات المنتجات
         let productIds = [];
         let quantities = [];
 
-        cart.forEach(item => {
+        cart.forEach(function (item) {
             productIds.push(item.productId);
             quantities.push(item.quantity);
         });
 
-        // ملء الحقول المخفية
         document.getElementById('product_ids').value = productIds.join(',');
         document.getElementById('quantities').value = quantities.join(',');
 
-        // إظهار رسالة انتظار
         const submitBtn = document.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.innerHTML = '⏳ جاري المعالجة...';
@@ -182,10 +198,12 @@
         return true;
     }
 
-    // تحميل السلة عند فتح الصفحة
-    window.onload = function() {
+
+    window.onload = function () {
         displayCart();
     };
+
 </script>
+
 </body>
 </html>
