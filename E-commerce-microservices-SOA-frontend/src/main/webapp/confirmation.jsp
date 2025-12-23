@@ -155,15 +155,6 @@
             <%= errorMsg %>
         </p>
 
-        <div style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; margin-top: 20px;">
-            <strong>💡 تأكد من:</strong>
-            <ul style="margin-top: 10px; text-align: right;">
-                <li>Order Service شغال على port 5001</li>
-                <li>Inventory Service شغال على port 5002</li>
-                <li>Pricing Service شغال على port 5003</li>
-                <li>جميع الخدمات متصلة بقاعدة البيانات</li>
-            </ul>
-        </div>
 
         <div style="text-align: center; margin-top: 20px;">
             <a href="checkout.jsp" class="btn" style="margin-left: 15px;">

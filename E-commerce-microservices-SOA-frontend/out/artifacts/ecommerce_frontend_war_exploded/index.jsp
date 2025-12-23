@@ -24,11 +24,12 @@
         <ul>
             <li><a href="getProducts">الرئيسية</a></li>
             <li><a href="getProducts">المنتجات</a></li>
+            <li><a href="getProfile">الملف الشخصي</a></li>
+            <li><a href="getOrderHistory">سجل الطلبات</a></li>
             <li><a href="checkout.jsp">سلة التسوق (<span id="cartCount">0</span>)</a></li>
         </ul>
     </nav>
 
-    <!-- Error/Success Messages -->
     <%
         Boolean success = (Boolean) request.getAttribute("success");
         String error = (String) request.getAttribute("error");
@@ -77,7 +78,7 @@
                         stockText = "متوفر";
                     }
 
-                    // ✅ تنظيف اسم المنتج من أي characters خاصة
+                    // Escape product name for JavaScript
                     String cleanProductName = product.getProductName()
                             .replace("\\", "\\\\")
                             .replace("\"", "\\\"")
@@ -137,24 +138,9 @@
         <% } %>
     </div>
 
-    <!-- Shopping Cart Preview -->
-    <div class="form-section" id="cartPreview" style="display: none;">
-        <h2 style="color: #667eea; margin-bottom: 20px;">🛒 سلة التسوق</h2>
-        <div id="cartItems"></div>
-        <div class="summary-total" style="text-align: center; margin-top: 20px;">
-            الإجمالي: <span id="cartTotal">0.00</span> جنيه
-        </div>
-        <div style="text-align: center; margin-top: 20px;">
-            <a href="checkout.jsp" class="btn btn-success" style="margin-left: 10px;">
-                ✅ إتمام الشراء
-            </a>
-            <button class="btn btn-danger" onclick="clearCart()">
-                🗑️ إفراغ السلة
-            </button>
-        </div>
-    </div>
 
-    <!-- Instructions -->
+
+    <!-- Usage Instructions -->
     <div class="form-section">
         <h3 style="color: #667eea; margin-bottom: 15px;">📝 كيفية الاستخدام:</h3>
         <ol style="margin-right: 20px; line-height: 2;">
@@ -162,7 +148,25 @@
             <li>يمكنك زيادة أو تقليل الكمية من السلة</li>
             <li>بعد اختيار المنتجات، اضغط "إتمام الشراء"</li>
             <li>أدخل بياناتك وأكمل الطلب</li>
+            <li>يمكنك مشاهدة ملفك الشخصي ونقاط الولاء</li>
+            <li>راجع سجل طلباتك السابقة</li>
         </ol>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="form-section">
+        <h3 style="color: #667eea; margin-bottom: 15px;">🔗 روابط سريعة</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <a href="getProfile?customer_id=1" class="btn" style="width: 100%; padding: 15px; text-align: center;">
+                👤 الملف الشخصي
+            </a>
+            <a href="getOrderHistory?customer_id=1" class="btn" style="width: 100%; padding: 15px; text-align: center;">
+                📦 سجل الطلبات
+            </a>
+            <a href="checkout.jsp" class="btn" style="width: 100%; padding: 15px; text-align: center;">
+                🛒 سلة التسوق
+            </a>
+        </div>
     </div>
 </div>
 
@@ -177,7 +181,9 @@
 
     let cart = [];
 
-    // تحميل السلة من localStorage
+    /**
+     * Load cart from localStorage
+     */
     function loadCart() {
         try {
             const savedCart = localStorage.getItem('cart');
@@ -194,7 +200,9 @@
         }
     }
 
-    // حفظ السلة في localStorage
+    /**
+     * Save cart to localStorage
+     */
     function saveCart() {
         try {
             localStorage.setItem('cart', JSON.stringify(cart));
@@ -206,7 +214,9 @@
         }
     }
 
-    // ✅ إضافة منتج للسلة
+    /**
+     * Add product to cart
+     */
     function addToCart(productId, productName, price, maxQuantity) {
         console.log('');
         console.log('➕ ADD TO CART CALLED');
@@ -215,25 +225,24 @@
         console.log('  Price:', price);
         console.log('  Max Quantity:', maxQuantity);
 
-        // التحقق من صحة البيانات
+        // Validate inputs
         if (!productId || !productName || !price || !maxQuantity) {
             console.error('❌ INVALID DATA!');
             alert('خطأ في بيانات المنتج!');
             return false;
         }
 
-        // تحويل البيانات للنوع الصحيح
         productId = parseInt(productId);
         price = parseFloat(price);
         maxQuantity = parseInt(maxQuantity);
 
         console.log('  Converted values:', {productId, price, maxQuantity});
 
-        // البحث عن المنتج في السلة
+        // Check if product already in cart
         let existingIndex = cart.findIndex(item => item.productId === productId);
 
         if (existingIndex !== -1) {
-            // المنتج موجود
+            // Product exists, increase quantity
             console.log('  Product already in cart at index:', existingIndex);
 
             if (cart[existingIndex].quantity >= maxQuantity) {
@@ -245,7 +254,7 @@
             cart[existingIndex].quantity++;
             console.log('  ✓ Quantity increased to:', cart[existingIndex].quantity);
         } else {
-            // منتج جديد
+            // New product, add to cart
             console.log('  Adding new product to cart');
             cart.push({
                 productId: productId,
@@ -257,7 +266,7 @@
             console.log('  ✓ Product added successfully');
         }
 
-        // حفظ السلة
+        // Save and update UI
         if (saveCart()) {
             console.log('  Current cart:', cart);
             updateCartDisplay();
@@ -269,7 +278,9 @@
         return false;
     }
 
-    // تحديث عداد السلة
+    /**
+     * Update cart count badge
+     */
     function updateCartCount() {
         let totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
         const countElement = document.getElementById('cartCount');
@@ -279,7 +290,9 @@
         }
     }
 
-    // تحديث عرض السلة
+    /**
+     * Update cart display preview
+     */
     function updateCartDisplay() {
         const cartPreview = document.getElementById('cartPreview');
         const cartItemsDiv = document.getElementById('cartItems');
@@ -336,7 +349,9 @@
         console.log('💰 Total:', total.toFixed(2), 'EGP');
     }
 
-    // زيادة الكمية
+    /**
+     * Increase quantity of item at index
+     */
     function increaseQuantity(index) {
         console.log('➕ Increasing quantity for item', index);
 
@@ -351,7 +366,9 @@
         updateCartCount();
     }
 
-    // تقليل الكمية
+    /**
+     * Decrease quantity of item at index
+     */
     function decreaseQuantity(index) {
         console.log('➖ Decreasing quantity for item', index);
 
@@ -365,7 +382,9 @@
         }
     }
 
-    // حذف من السلة
+    /**
+     * Remove item from cart
+     */
     function removeFromCart(index) {
         if (confirm('هل تريد حذف ' + cart[index].productName + ' من السلة؟')) {
             console.log('🗑️ Removing item', index, ':', cart[index].productName);
@@ -377,7 +396,9 @@
         }
     }
 
-    // إفراغ السلة
+    /**
+     * Clear entire cart
+     */
     function clearCart() {
         if (confirm('هل تريد إفراغ السلة بالكامل؟')) {
             console.log('🗑️ Clearing entire cart');
@@ -389,7 +410,9 @@
         }
     }
 
-    // عرض إشعار
+    /**
+     * Show notification message
+     */
     function showNotification(message) {
         const notification = document.createElement('div');
         notification.style.cssText = `
@@ -422,12 +445,12 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 DOM loaded, initializing...');
 
-        // تحميل السلة
+        // Load cart from localStorage
         loadCart();
         updateCartDisplay();
         updateCartCount();
 
-        // ربط أزرار "أضف للسلة"
+        // Attach event listeners to all "Add to Cart" buttons
         const buttons = document.querySelectorAll('.add-to-cart-btn');
         console.log('🔘 Found', buttons.length, 'add-to-cart buttons');
 
@@ -449,7 +472,7 @@
         console.log('='.repeat(60));
     });
 
-    // CSS للأنيميشن
+    // CSS for animations
     const style = document.createElement('style');
     style.textContent = `
         @keyframes slideDown {

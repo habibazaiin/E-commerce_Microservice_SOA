@@ -73,29 +73,18 @@
             </div>
         </form>
     </div>
-
-    <!-- Instructions -->
-    <div class="form-section">
-        <h3 style="color: #667eea; margin-bottom: 15px;">ℹ️ معلومات مهمة:</h3>
-        <ul style="margin-right: 20px; line-height: 2;">
-            <li>تأكد من إضافة منتجات للسلة قبل إتمام الطلب</li>
-            <li>Order Service يجب أن يكون شغالاً على port 5001</li>
-            <li>Inventory Service يجب أن يكون شغالاً على port 5002</li>
-            <li>Pricing Service يجب أن يكون شغالاً على port 5003</li>
-        </ul>
-    </div>
 </div>
 
 <script type="text/javascript">
 
-    // جلب السلة من LocalStorage
+
     let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
-    // عرض محتويات السلة
+
     function displayCart() {
         const cartDisplay = document.getElementById('cartDisplay');
 
-        // لو السلة فاضية
+
         if (!cart || cart.length === 0) {
             cartDisplay.innerHTML = `
                 <div class="alert alert-info">
@@ -156,7 +145,7 @@
 
         cartDisplay.innerHTML = html;
 
-        // ربط أزرار الحذف
+
         document.querySelectorAll('.remove-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 removeItem(this.dataset.index);
@@ -164,7 +153,7 @@
         });
     }
 
-    // حذف عنصر من السلة
+
     function removeItem(index) {
         if (confirm('هل تريد حذف هذا المنتج؟')) {
             cart.splice(index, 1);
@@ -173,7 +162,7 @@
         }
     }
 
-    // التحقق قبل الإرسال
+
     function validateAndSubmit() {
         if (!cart || cart.length === 0) {
             alert('❌ السلة فارغة! أضف منتجات أولاً.');
@@ -198,7 +187,7 @@
         return true;
     }
 
-    // تحميل السلة عند فتح الصفحة
+
     window.onload = function () {
         displayCart();
     };

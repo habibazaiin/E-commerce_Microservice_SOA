@@ -11,13 +11,13 @@
 </head>
 <body>
 <div class="container">
-    <!-- Header -->
+
     <div class="header">
         <h1>✅ تأكيد الطلب</h1>
         <p>تم إنشاء طلبك بنجاح!</p>
     </div>
 
-    <!-- Navigation -->
+
     <nav class="nav">
         <ul>
             <li><a href="getProducts">الرئيسية</a></li>
@@ -31,13 +31,13 @@
         Boolean success = (Boolean) request.getAttribute("success");
 
         if (success != null && success && orderData != null) {
-            // ✅ استخراج order_id كـ INT أو STRING
+
             String orderId;
             try {
-                // محاولة قراءته كـ INT أولاً
+
                 orderId = String.valueOf(orderData.get("order_id").getAsInt());
             } catch (Exception e) {
-                // لو فشل، نقرأه كـ STRING
+
                 orderId = orderData.get("order_id").getAsString();
             }
 
@@ -45,14 +45,14 @@
             String timestamp = orderData.get("timestamp").getAsString();
             String status = orderData.get("status").getAsString();
 
-            // بيانات الأسعار
+
             JsonObject pricing = orderData.getAsJsonObject("pricing");
             double subtotal = pricing.has("subtotal") ? pricing.get("subtotal").getAsDouble() : 0;
             double discount = pricing.has("discount") ? pricing.get("discount").getAsDouble() : 0;
             double tax = pricing.has("tax") ? pricing.get("tax").getAsDouble() : 0;
             double total = pricing.has("total_amount") ? pricing.get("total_amount").getAsDouble() : 0;
 
-            // المنتجات
+
             JsonArray products = orderData.getAsJsonArray("products");
     %>
 
@@ -135,7 +135,7 @@
     </div>
 
     <script>
-        // مسح السلة بعد نجاح الطلب
+
         localStorage.removeItem('cart');
         console.log('✅ Order completed successfully!');
         console.log('Order ID: <%= orderId %>');
@@ -144,7 +144,7 @@
 
     <%
     } else {
-        // فشل الطلب
+
         String errorMsg = request.getAttribute("error") != null
                 ? (String) request.getAttribute("error")
                 : "حدث خطأ غير معروف";
@@ -155,15 +155,6 @@
             <%= errorMsg %>
         </p>
 
-        <div style="background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; margin-top: 20px;">
-            <strong>💡 تأكد من:</strong>
-            <ul style="margin-top: 10px; text-align: right;">
-                <li>Order Service شغال على port 5001</li>
-                <li>Inventory Service شغال على port 5002</li>
-                <li>Pricing Service شغال على port 5003</li>
-                <li>جميع الخدمات متصلة بقاعدة البيانات</li>
-            </ul>
-        </div>
 
         <div style="text-align: center; margin-top: 20px;">
             <a href="checkout.jsp" class="btn" style="margin-left: 15px;">

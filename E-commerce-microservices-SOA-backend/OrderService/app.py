@@ -4,10 +4,8 @@ import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
 import logging
-from config import Config
 
 app = Flask(__name__)
-app.config.from_object(Config)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,9 +14,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# Database Configuration
+# Configuration
 # ============================================================
 
+# Service URLs
+INVENTORY_SERVICE_URL = 'http://localhost:5002'
+PRICING_SERVICE_URL = 'http://localhost:5003'
+CUSTOMER_SERVICE_URL = 'http://localhost:5004'
+NOTIFICATION_SERVICE_URL = 'http://localhost:5005'
+
+# Database Configuration
 DB_CONFIG = {
     "host": "localhost",
     "user": "ecommerce_user",
@@ -32,7 +37,7 @@ def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
 
 # ============================================================
-# دالة التحقق من المدخلات
+# Input Validation
 # ============================================================
 
 def validate_order_input(data):
@@ -64,12 +69,10 @@ def validate_order_input(data):
     return True, None
 
 # ============================================================
-# دالة التحقق من المخزون (مع جلب الأسعار)
+# Check Inventory (with price fetching)
 # ============================================================
 
 def check_inventory(products):
-   
-    inventory_url = app.config['INVENTORY_SERVICE_URL']
     inventory_items = []
     
     logger.info(f"🔍 Checking inventory for {len(products)} products...")
@@ -80,7 +83,7 @@ def check_inventory(products):
         
         try:
             response = requests.get(
-                f"{inventory_url}/inventory/{product_id}",
+                f"{INVENTORY_SERVICE_URL}/inventory/{product_id}",
                 timeout=30
             )
             
@@ -96,17 +99,17 @@ def check_inventory(products):
             logger.info(f"  ✓ Product {product_id}: {product_name}")
             logger.info(f"    Price: {unit_price}, Available: {available_qty}, Requested: {requested_qty}")
             
-            # التحقق من توفر الكمية
+            # Check quantity availability
             if available_qty < requested_qty:
                 logger.warning(f"⚠️ Insufficient stock for product {product_id}")
                 return False, f"Insufficient stock for product {product_id}. Available: {available_qty}, Requested: {requested_qty}"
             
-            # ✅ حفظ كل البيانات مع unit_price
+            # Save all data including unit_price
             inventory_items.append({
                 'product_id': product_id,
                 'product_name': product_name,
                 'quantity': requested_qty,
-                'unit_price': unit_price  # ✅ مهم جداً!
+                'unit_price': unit_price
             })
             
         except requests.exceptions.Timeout:
@@ -125,16 +128,12 @@ def check_inventory(products):
     return True, inventory_items
 
 # ============================================================
-# دالة حساب الأسعار (مع unit_price)
+# Calculate Pricing
 # ============================================================
 
 def calculate_pricing(inventory_items, region='Cairo'):
-    
-    pricing_url = app.config['PRICING_SERVICE_URL']
-    
-    
     payload = {
-        "products": inventory_items,  
+        "products": inventory_items,
         "region": region
     }
     
@@ -143,7 +142,7 @@ def calculate_pricing(inventory_items, region='Cairo'):
     
     try:
         response = requests.post(
-            f"{pricing_url}/api/pricing/calculate",
+            f"{PRICING_SERVICE_URL}/api/pricing/calculate",
             json=payload,
             timeout=30,
             headers={'Content-Type': 'application/json'}
@@ -179,11 +178,10 @@ def calculate_pricing(inventory_items, region='Cairo'):
         return False, f"Error calculating pricing: {str(e)}"
 
 # ============================================================
-# حفظ الطلب في Database
+# Save Order to Database
 # ============================================================
 
 def save_order_to_database(customer_id, pricing_data, inventory_items):
-    
     conn = None
     try:
         conn = get_db_connection()
@@ -193,7 +191,7 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
         
         logger.info(f"💾 Saving order to database...")
         
-        # استخراج البيانات
+        # Extract data
         subtotal = pricing_data.get('subtotal', 0.0)
         discount = pricing_data.get('discount', 0.0)
         tax = pricing_data.get('tax', 0.0)
@@ -205,13 +203,13 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
         logger.info(f"  Tax: {tax}")
         logger.info(f"  Total: {total_amount}")
         
-        # التحقق من البيانات
+        # Validate data
         if total_amount == 0:
             logger.error("❌ Total amount is 0! Pricing data invalid!")
             logger.error(f"Pricing data: {pricing_data}")
             return False, "Invalid pricing data: total amount is 0"
         
-        # 1. حفظ Order
+        # 1. Save Order
         cursor.execute("""
             INSERT INTO orders 
             (customer_id, total_amount, subtotal, discount, tax, status)
@@ -228,7 +226,7 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
         order_id = cursor.lastrowid
         logger.info(f"✓ Order {order_id} record created")
         
-        # 2. حفظ Order Items
+        # 2. Save Order Items
         items = pricing_data.get('items', [])
         
         if not items:
@@ -264,7 +262,7 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
         
         logger.info(f"✓ {len(items)} items saved")
         
-        # 3. تحديث المخزون
+        # 3. Update Inventory
         logger.info(f"📉 Updating inventory...")
         for item in inventory_items:
             cursor.execute("""
@@ -304,7 +302,7 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
             conn.close()
 
 # ============================================================
-# الـ Endpoint الرئيسي - إنشاء الطلب
+# Main Endpoint - Create Order
 # ============================================================
 
 @app.route('/api/orders/create', methods=['POST'])
@@ -314,17 +312,17 @@ def create_order():
     logger.info("=" * 60)
     
     try:
-        # 1. الحصول على البيانات
+        # 1. Get data
         data = request.get_json()
         logger.info(f"📥 Received data: {data}")
         
-        # 2. التحقق من المدخلات
+        # 2. Validate input
         is_valid, error_msg = validate_order_input(data)
         if not is_valid:
             logger.warning(f"❌ Invalid input: {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
         
-        # 3. التحقق من المخزون (وجلب الأسعار)
+        # 3. Check inventory (and fetch prices)
         inventory_success, inventory_result = check_inventory(data['products'])
         if not inventory_success:
             logger.warning(f"❌ Inventory check failed: {inventory_result}")
@@ -334,9 +332,9 @@ def create_order():
                 'stage': 'inventory_check'
             }), 400
         
-        # 4. حساب الأسعار (مع البيانات الكاملة)
+        # 4. Calculate pricing
         pricing_success, pricing_result = calculate_pricing(
-            inventory_result,  # ✅ فيها unit_price!
+            inventory_result,
             region='Cairo'
         )
         
@@ -348,7 +346,7 @@ def create_order():
                 'stage': 'pricing_calculation'
             }), 400
         
-        # 5. حفظ في Database
+        # 5. Save to Database
         save_success, order_id_or_error = save_order_to_database(
             data['customer_id'], 
             pricing_result, 
@@ -363,7 +361,44 @@ def create_order():
                 'stage': 'database_save'
             }), 500
         
-        # 6. تجميع الرد النهائي
+        # 6. Update loyalty points
+        try:
+            total_amount = pricing_result.get('total_amount', 0)
+            points_to_add = int(total_amount / 10)  # 1 point per 10 EGP
+            
+            if points_to_add > 0:
+                loyalty_response = requests.put(
+                    f"{CUSTOMER_SERVICE_URL}/api/customers/{data['customer_id']}/loyalty",
+                    json={'points_to_add': points_to_add},
+                    timeout=10
+                )
+                
+                if loyalty_response.status_code == 200:
+                    logger.info(f"✅ Added {points_to_add} loyalty points")
+                else:
+                    logger.warning(f"⚠️ Failed to update loyalty points")
+        except Exception as e:
+            logger.warning(f"⚠️ Loyalty points update failed: {e}")
+        
+        # 7. Send notification
+        try:
+            notification_response = requests.post(
+                f"{NOTIFICATION_SERVICE_URL}/api/notifications/send",
+                json={
+                    'order_id': order_id_or_error,
+                    'notification_type': 'order_confirmation'
+                },
+                timeout=10
+            )
+            
+            if notification_response.status_code == 201:
+                logger.info(f"✅ Notification sent successfully")
+            else:
+                logger.warning(f"⚠️ Failed to send notification")
+        except Exception as e:
+            logger.warning(f"⚠️ Notification sending failed: {e}")
+        
+        # 8. Prepare final response
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         response_data = {
@@ -394,12 +429,12 @@ def create_order():
         }), 500
 
 # ============================================================
-# استرجاع Order من Database
+# Retrieve Order from Database
 # ============================================================
 
 @app.route('/api/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
-    """استرجاع Order من Database"""
+    """Retrieve Order from Database"""
     logger.info(f"🔍 Retrieving order {order_id}")
     
     try:
@@ -455,24 +490,26 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'Order Service',
-        'port': Config.PORT
+        'port': 5001
     }), 200
 
 # ============================================================
-# تشغيل الـ Service
+# Run Service
 # ============================================================
 
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("🚀 STARTING ORDER SERVICE")
-    logger.info(f"📍 Port: {Config.PORT}")
+    logger.info(f"📍 Port: 5001")
     logger.info(f"🗄️  Database: ecommerce_system")
-    logger.info(f"📦 Inventory URL: {Config.INVENTORY_SERVICE_URL}")
-    logger.info(f"💰 Pricing URL: {Config.PRICING_SERVICE_URL}")
+    logger.info(f"📦 Inventory URL: {INVENTORY_SERVICE_URL}")
+    logger.info(f"💰 Pricing URL: {PRICING_SERVICE_URL}")
+    logger.info(f"👤 Customer URL: {CUSTOMER_SERVICE_URL}")
+    logger.info(f"📧 Notification URL: {NOTIFICATION_SERVICE_URL}")
     logger.info("=" * 60)
     
     app.run(
-        host=Config.HOST,
-        port=Config.PORT,
-        debug=Config.DEBUG
+        host='0.0.0.0',
+        port=5001,
+        debug=True
     )

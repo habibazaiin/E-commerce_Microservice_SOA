@@ -73,17 +73,6 @@
             </div>
         </form>
     </div>
-
-    <!-- Instructions -->
-    <div class="form-section">
-        <h3 style="color: #667eea; margin-bottom: 15px;">ℹ️ معلومات مهمة:</h3>
-        <ul style="margin-right: 20px; line-height: 2;">
-            <li>تأكد من إضافة منتجات للسلة قبل إتمام الطلب</li>
-            <li>Order Service يجب أن يكون شغالاً على port 5001</li>
-            <li>Inventory Service يجب أن يكون شغالاً على port 5002</li>
-            <li>Pricing Service يجب أن يكون شغالاً على port 5003</li>
-        </ul>
-    </div>
 </div>
 
 <script type="text/javascript">
