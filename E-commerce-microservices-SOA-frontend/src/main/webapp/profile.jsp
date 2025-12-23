@@ -27,6 +27,68 @@
         </ul>
     </nav>
 
+    <!-- Customer Selector -->
+    <div class="form-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h3 style="color: white; margin: 0;">👤 اختر العميل</h3>
+                <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 0.9em;">
+                    عرض ملف شخصي مختلف
+                </p>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label for="customerSelector"></label><select id="customerSelector"
+                                                              style="padding: 10px 15px; border-radius: 8px; border: none; font-size: 1em; min-width: 250px; cursor: pointer;">
+                    <option value="">جاري التحميل...</option>
+                </select>
+
+                <button onclick="loadSelectedCustomer()"
+                        class="btn"
+                        style="background: white; color: #667eea; padding: 10px 20px;">
+                    تحميل البيانات
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load customers list
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const response = await fetch('getAllCustomers');
+                const data = await response.json();
+
+                const selector = document.getElementById('customerSelector');
+                selector.innerHTML = '';
+
+                if (data.success && data.customers) {
+                    data.customers.forEach(customer => {
+                        const option = document.createElement('option');
+                        option.value = customer.customer_id;
+                        option.textContent = `\${customer.name} (#\${customer.customer_id})`;
+                        selector.appendChild(option);
+                    });
+
+                    // Set current customer
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const currentId = urlParams.get('customer_id') || '1';
+                    selector.value = currentId;
+                }
+            } catch (error) {
+                console.error('Error loading customers:', error);
+            }
+        });
+
+        function loadSelectedCustomer() {
+            const customerId = document.getElementById('customerSelector').value;
+            if (customerId) {
+                localStorage.setItem('selectedCustomerId', customerId);
+                window.location.href = 'getProfile?customer_id=' + customerId;
+            }
+        }
+    </script>
+
     <%
         Boolean success = (Boolean) request.getAttribute("success");
         String error = (String) request.getAttribute("error");

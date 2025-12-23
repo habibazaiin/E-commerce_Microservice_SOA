@@ -237,45 +237,6 @@ E-Commerce Team
         }), 500
 
 
-@app.route('/api/notifications/history/<int:customer_id>', methods=['GET'])
-def get_notification_history(customer_id):
-    """Get notification history for a customer"""
-    logger.info(f"📜 GET /api/notifications/history/{customer_id}")
-    
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("""
-            SELECT notification_id, order_id, customer_id, 
-                   notification_type, message, sent_at
-            FROM notification_log
-            WHERE customer_id = %s
-            ORDER BY sent_at DESC
-        """, (customer_id,))
-        
-        notifications = cursor.fetchall()
-        
-        # Convert datetime to string
-        for notification in notifications:
-            if notification.get('sent_at'):
-                notification['sent_at'] = notification['sent_at'].strftime('%Y-%m-%d %H:%M:%S')
-        
-        cursor.close()
-        conn.close()
-        
-        logger.info(f"✓ Found {len(notifications)} notifications")
-        
-        return jsonify({
-            'customer_id': customer_id,
-            'total_notifications': len(notifications),
-            'notifications': notifications
-        }), 200
-        
-    except Error as e:
-        logger.error(f"❌ Database error: {e}")
-        return jsonify({'error': str(e)}), 500
-
 
 @app.route('/health', methods=['GET'])
 def health_check():

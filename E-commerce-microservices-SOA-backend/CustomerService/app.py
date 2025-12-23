@@ -227,6 +227,44 @@ def update_loyalty_points(customer_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/customers/all', methods=['GET'])
+def get_all_customers():
+    """Get all customers list"""
+    logger.info("📋 GET /api/customers/all")
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("""
+            SELECT customer_id, name, email, phone, loyalty_points
+            FROM customers
+            ORDER BY customer_id
+        """)
+        
+        customers = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Convert Decimal to float
+        for customer in customers:
+            for key in list(customer.keys()):
+                if isinstance(customer[key], Decimal):
+                    customer[key] = float(customer[key])
+        
+        logger.info(f"✅ Found {len(customers)} customers")
+        
+        return jsonify({
+            'success': True,
+            'total_customers': len(customers),
+            'customers': customers
+        }), 200
+        
+    except Error as e:
+        logger.error(f"❌ Database error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
