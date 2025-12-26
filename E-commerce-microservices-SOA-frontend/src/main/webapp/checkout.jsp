@@ -37,9 +37,9 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="customerSelector"></label><select id="customerSelector"
-                                                              onchange="updateCustomerId()"
-                                                              style="padding: 10px 15px; border-radius: 8px; border: none; font-size: 1em; min-width: 250px; cursor: pointer;">
+                <select id="customerSelector"
+                        onchange="updateCustomerId()"
+                        style="padding: 10px 15px; border-radius: 8px; border: none; font-size: 1em; min-width: 250px; cursor: pointer;">
                     <option value="">جاري التحميل...</option>
                 </select>
 
@@ -81,6 +81,20 @@
                 </small>
             </div>
 
+            <!-- Region Selection -->
+            <div class="form-group">
+                <label for="region">🌍 المحافظة:</label>
+                <select id="region"
+                        name="region"
+                        required
+                        style="padding: 10px 15px; border-radius: 8px; border: 2px solid #667eea; font-size: 1em; width: 100%; cursor: pointer;">
+                    <option value="">جاري تحميل المحافظات...</option>
+                </select>
+                <small id="taxRateInfo" style="color: #666; display: block; margin-top: 5px;">
+                    💡 سيتم حساب الضريبة بناءً على المحافظة المختارة
+                </small>
+            </div>
+
             <!-- Hidden fields for products -->
             <input type="hidden" id="product_ids" name="product_ids">
             <input type="hidden" id="quantities" name="quantities">
@@ -107,11 +121,38 @@
         <h3 style="color: #667eea; margin-bottom: 15px;">ℹ️ معلومات مهمة:</h3>
         <ul style="margin-right: 20px; line-height: 2;">
             <li>اختر العميل من القائمة المنسدلة أعلاه</li>
+            <li>حدد المحافظة لحساب الضريبة الصحيحة</li>
             <li>تأكد من إضافة منتجات للسلة قبل إتمام الطلب</li>
-            <li>Order Service يجب أن يكون شغالاً على port 5001</li>
-            <li>Inventory Service يجب أن يكون شغالاً على port 5002</li>
-            <li>Pricing Service يجب أن يكون شغالاً على port 5003</li>
+            <li>سيتم تطبيق خصومات الكمية تلقائياً حسب القواعد المحددة</li>
         </ul>
+    </div>
+
+    <!-- Pricing Rules Info -->
+    <div class="form-section" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
+        <h3 style="color: white; margin-bottom: 20px;">💰 قواعد الخصومات</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                <strong>💻 Laptop:</strong>
+                <p style="margin: 5px 0;">5+ قطع = 10% خصم</p>
+                <p style="margin: 5px 0;">10+ قطع = 15% خصم</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                <strong>🖱️ Mouse:</strong>
+                <p style="margin: 5px 0;">10+ قطع = 15% خصم</p>
+                <p style="margin: 5px 0;">20+ قطع = 20% خصم</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                <strong>⌨️ Keyboard:</strong>
+                <p style="margin: 5px 0;">10+ قطع = 12% خصم</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                <strong>🖥️ Monitor:</strong>
+                <p style="margin: 5px 0;">5+ قطع = 8% خصم</p>
+            </div>
+        </div>
+        <p style="text-align: center; margin-top: 20px; font-size: 0.9em; opacity: 0.9;">
+            📌 الخصومات تطبق تلقائياً عند الوصول للكمية المطلوبة
+        </p>
     </div>
 </div>
 
@@ -123,6 +164,7 @@
     // Load customers list on page load
     document.addEventListener('DOMContentLoaded', function() {
         loadCustomersList();
+        loadRegionsList();  // ← جديد: تحميل المحافظات
         displayCart();
 
         // Set customer ID from localStorage if exists
@@ -166,6 +208,66 @@
             console.error('❌ Error loading customers:', error);
             const selector = document.getElementById('customerSelector');
             selector.innerHTML = '<option value="">خطأ في التحميل</option>';
+        }
+    }
+
+    // Load regions list from API (from database)
+    async function loadRegionsList() {
+        try {
+            console.log('🌍 Loading regions from database...');
+
+            const response = await fetch('getRegions');
+            const data = await response.json();
+
+            const selector = document.getElementById('region');
+            const taxInfo = document.getElementById('taxRateInfo');
+
+            selector.innerHTML = '<option value="">اختر المحافظة...</option>';
+
+            if (data.success && data.regions) {
+                data.regions.forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region.region;
+                    option.textContent = `\${region.region} (ضريبة \${region.tax_rate}%)`;
+                    option.dataset.taxRate = region.tax_rate;
+
+                    // Set Cairo as default
+                    if (region.region === 'Cairo') {
+                        option.selected = true;
+                    }
+
+                    selector.appendChild(option);
+                });
+
+                console.log(`✅ Loaded \${data.regions.length} regions from database`);
+
+                // Update tax info on change
+                selector.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    const taxRate = selectedOption.dataset.taxRate;
+                    if (taxRate) {
+                        taxInfo.innerHTML = `💡 معدل الضريبة: \${taxRate}% (من قاعدة البيانات)`;
+                        taxInfo.style.color = '#10b981';
+                        taxInfo.style.fontWeight = 'bold';
+                    } else {
+                        taxInfo.innerHTML = '💡 سيتم حساب الضريبة بناءً على المحافظة المختارة';
+                        taxInfo.style.color = '#666';
+                        taxInfo.style.fontWeight = 'normal';
+                    }
+                });
+
+                // Trigger change event for default selection
+                selector.dispatchEvent(new Event('change'));
+
+            } else {
+                console.error('❌ Failed to load regions');
+                selector.innerHTML = '<option value="">خطأ في تحميل المحافظات</option>';
+            }
+
+        } catch (error) {
+            console.error('❌ Error loading regions:', error);
+            const selector = document.getElementById('region');
+            selector.innerHTML = '<option value="">خطأ في الاتصال بالخادم</option>';
         }
     }
 
@@ -251,7 +353,12 @@
 
         html += `
             <div class="summary-total">
-                الإجمالي: \${total.toFixed(2)} جنيه
+                المجموع (قبل الخصم والضريبة): \${total.toFixed(2)} جنيه
+            </div>
+            <div style="text-align: center; padding: 15px; background: #f3f4f6; border-radius: 8px; margin-top: 15px;">
+                <small style="color: #666;">
+                    💡 سيتم حساب الخصومات والضرائب في الخطوة التالية
+                </small>
             </div>
         </div>
     `;
@@ -281,6 +388,13 @@
         const customerId = document.getElementById('customer_id').value;
         if (!customerId) {
             alert('❌ اختر عميل أولاً من القائمة أعلاه!');
+            return false;
+        }
+
+        // Check region
+        const region = document.getElementById('region').value;
+        if (!region) {
+            alert('❌ اختر المحافظة!');
             return false;
         }
 

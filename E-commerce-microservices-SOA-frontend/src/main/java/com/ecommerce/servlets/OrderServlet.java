@@ -1,4 +1,3 @@
-
 package com.ecommerce.servlets;
 
 import jakarta.servlet.ServletException;
@@ -43,10 +42,12 @@ public class OrderServlet extends HttpServlet {
             String customerId = request.getParameter("customer_id");
             String productIds = request.getParameter("product_ids");
             String quantities = request.getParameter("quantities");
+            String region = request.getParameter("region");
 
             System.out.println("Customer ID: " + customerId);
             System.out.println("Product IDs: " + productIds);
             System.out.println("Quantities: " + quantities);
+            System.out.println("Region: " + region);
 
             if (customerId == null || productIds == null || quantities == null) {
                 request.setAttribute("error", "Missing required fields");
@@ -54,8 +55,13 @@ public class OrderServlet extends HttpServlet {
                 return;
             }
 
+            // Set default region if not provided
+            if (region == null || region.isEmpty()) {
+                region = "Cairo";
+                System.out.println("No region specified, using default: Cairo");
+            }
 
-            String jsonPayload = buildJsonPayload(customerId, productIds, quantities);
+            String jsonPayload = buildJsonPayload(customerId, productIds, quantities, region);
             System.out.println("JSON Payload: " + jsonPayload);
 
             System.out.println("Sending request to Order Service...");
@@ -100,12 +106,13 @@ public class OrderServlet extends HttpServlet {
     }
 
 
-    private String buildJsonPayload(String customerId, String productIds, String quantities) {
+    private String buildJsonPayload(String customerId, String productIds, String quantities, String region) {
         Gson gson = new Gson();
 
 
         JsonObject payload = new JsonObject();
         payload.addProperty("customer_id", Integer.parseInt(customerId));
+        payload.addProperty("region", region);
 
 
         JsonArray productsArray = new JsonArray();

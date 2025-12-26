@@ -321,23 +321,23 @@
             const itemTotal = itemPrice * itemQty;
             total += itemTotal;
 
-            console.log(`  [${index}] ${item.productName}: ${itemQty} × ${itemPrice} = ${itemTotal}`);
+            console.log(`  [\${index}] \${item.productName}: \${itemQty} × \${itemPrice} = \${itemTotal}`);
 
             cartHTML += `
                 <div class="cart-item">
                     <div class="item-details">
-                        <h4>${item.productName}</h4>
-                        <p>السعر: ${itemPrice.toFixed(2)} جنيه</p>
-                        <small style="color: #666;">الكمية المتاحة: ${item.maxQuantity}</small>
+                        <h4>\${item.productName}</h4>
+                        <p>السعر: \${itemPrice.toFixed(2)} جنيه</p>
+                        <small style="color: #666;">الكمية المتاحة: \${item.maxQuantity}</small>
                     </div>
                     <div class="item-quantity">
-                        <button class="quantity-btn" onclick="decreaseQuantity(${index})">-</button>
-                        <span style="font-weight: bold; margin: 0 10px;">${itemQty}</span>
-                        <button class="quantity-btn" onclick="increaseQuantity(${index})">+</button>
+                        <button class="quantity-btn" onclick="decreaseQuantity(\${index})">-</button>
+                        <span style="font-weight: bold; margin: 0 10px;">\${itemQty}</span>
+                        <button class="quantity-btn" onclick="increaseQuantity(\${index})">+</button>
                         <button class="btn btn-danger" style="margin-right: 15px; padding: 8px 15px;" onclick="removeFromCart(${index})">🗑️</button>
                     </div>
                     <div style="font-weight: bold; color: #667eea;">
-                        ${itemTotal.toFixed(2)} جنيه
+                        \${itemTotal.toFixed(2)} جنيه
                     </div>
                 </div>
             `;

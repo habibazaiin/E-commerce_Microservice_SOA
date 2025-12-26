@@ -149,25 +149,7 @@
             </p>
         </div>
 
-        <!-- Loyalty Benefits -->
-        <div class="order-summary" style="margin-top: 20px;">
-            <h2>🎁 مزايا نقاط الولاء</h2>
 
-            <div style="padding: 15px; background: #f3f4f6; border-radius: 8px; margin-bottom: 10px;">
-                <strong style="color: #667eea;">100 نقطة</strong>
-                <p style="margin-top: 5px; color: #666;">خصم 5% على طلبك القادم</p>
-            </div>
-
-            <div style="padding: 15px; background: #f3f4f6; border-radius: 8px; margin-bottom: 10px;">
-                <strong style="color: #667eea;">250 نقطة</strong>
-                <p style="margin-top: 5px; color: #666;">خصم 10% + شحن مجاني</p>
-            </div>
-
-            <div style="padding: 15px; background: #f3f4f6; border-radius: 8px;">
-                <strong style="color: #667eea;">500 نقطة</strong>
-                <p style="margin-top: 5px; color: #666;">خصم 20% + شحن مجاني + هدية مجانية</p>
-            </div>
-        </div>
 
         <!-- Actions -->
         <div style="text-align: center; margin-top: 30px;">

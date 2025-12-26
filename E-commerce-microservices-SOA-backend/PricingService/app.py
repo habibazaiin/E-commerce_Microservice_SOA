@@ -1,5 +1,3 @@
-
-
 from flask import Flask, request, jsonify
 import mysql.connector
 from mysql.connector import Error
@@ -84,13 +82,16 @@ def get_tax_rate(region='Cairo'):
         cursor.close()
         
         if result:
-            return decimal_to_float(result['tax_rate']) / 100
+            tax_rate = decimal_to_float(result['tax_rate']) / 100
+            logger.info(f"✓ Tax rate for {region}: {tax_rate * 100}% (from DB)")
+            return tax_rate
         
-        logger.warning(f"No tax rate found for region '{region}', using default 14%")
+        logger.warning(f"⚠️ No tax rate found for region '{region}' in DB, using default 14%")
         return 0.14
         
     except Error as e:
         logger.error(f"Error fetching tax rate: {e}")
+        logger.warning("Using default tax rate 14%")
         return 0.14
     finally:
         if conn and conn.is_connected():
@@ -98,10 +99,10 @@ def get_tax_rate(region='Cairo'):
 
 
 def apply_discount(product_id, quantity, unit_price):
-    
+    """Apply discount based on quantity"""
     pricing_rules = get_pricing_rules()
     
-    
+    # Find applicable discounts
     applicable_discounts = []
     
     for rule in pricing_rules:
@@ -109,7 +110,7 @@ def apply_discount(product_id, quantity, unit_price):
             min_qty = rule['min_quantity']
             discount_pct = decimal_to_float(rule['discount_percentage'])
             
-            
+            # Check if quantity qualifies
             if quantity >= min_qty:
                 applicable_discounts.append({
                     'min_quantity': min_qty,
@@ -117,16 +118,16 @@ def apply_discount(product_id, quantity, unit_price):
                 })
                 logger.debug(f"    → Rule found: {min_qty}+ items = {discount_pct}% off")
     
-    
+    # No discount applicable
     if not applicable_discounts:
         logger.debug(f"    → No discount applicable for product {product_id}")
         return unit_price, 0.0
     
-    
+    # Get best discount
     best_discount = max(applicable_discounts, key=lambda x: x['discount_percentage'])
     discount_pct = best_discount['discount_percentage']
     
-    
+    # Calculate discounted price
     discount_amount = unit_price * (discount_pct / 100)
     discounted_price = unit_price - discount_amount
     
@@ -139,9 +140,56 @@ def apply_discount(product_id, quantity, unit_price):
 # API Endpoints
 # ============================================================
 
+@app.route('/api/pricing/regions', methods=['GET'])
+def get_regions():
+    """Get all regions with their tax rates from database"""
+    logger.info("🌍 GET /api/pricing/regions - Fetching from database")
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("""
+            SELECT region, tax_rate
+            FROM tax_rates
+            ORDER BY 
+                CASE 
+                    WHEN region = 'Cairo' THEN 1
+                    WHEN region = 'Alexandria' THEN 2
+                    WHEN region = 'Giza' THEN 3
+                    WHEN region = 'Default' THEN 999
+                    ELSE 500
+                END,
+                region
+        """)
+        
+        regions = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Convert Decimal to float
+        for region in regions:
+            region['tax_rate'] = decimal_to_float(region['tax_rate'])
+        
+        logger.info(f"✅ Found {len(regions)} regions in database")
+        
+        return jsonify({
+            'success': True,
+            'total_regions': len(regions),
+            'regions': regions
+        }), 200
+        
+    except Error as e:
+        logger.error(f"❌ Database error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/pricing/calculate', methods=['POST'])
 def calculate_pricing():
-    
+    """Calculate pricing with discounts and taxes"""
     logger.info("=" * 60)
     logger.info("💰 POST /api/pricing/calculate")
     logger.info("=" * 60)
@@ -190,7 +238,7 @@ def calculate_pricing():
             
             logger.info(f"\n  🔸 Product ID: {product_id}, Qty: {quantity}, Price: {unit_price}")
             
-            # Apply discount
+            # Apply discount (from pricing_rules table)
             discounted_price, discount_pct = apply_discount(product_id, quantity, unit_price)
             
             # Calculate line total
@@ -211,7 +259,7 @@ def calculate_pricing():
             
             logger.info(f"  ✓ Line total: {line_total:.2f} EGP")
         
-        # Get tax rate
+        # Get tax rate (from tax_rates table)
         tax_rate = get_tax_rate(region)
         tax = subtotal * tax_rate
         
@@ -230,6 +278,7 @@ def calculate_pricing():
         
         logger.info("\n" + "=" * 60)
         logger.info(f"📊 PRICING SUMMARY:")
+        logger.info(f"   Region:         {region}")
         logger.info(f"   Subtotal:       {subtotal:.2f} EGP")
         logger.info(f"   Discount:      -{total_discount:.2f} EGP")
         logger.info(f"   Tax ({tax_rate*100:.0f}%):       +{tax:.2f} EGP")

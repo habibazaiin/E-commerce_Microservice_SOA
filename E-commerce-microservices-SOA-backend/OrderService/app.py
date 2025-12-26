@@ -138,6 +138,7 @@ def calculate_pricing(inventory_items, region='Cairo'):
     }
     
     logger.info(f"💰 Calculating pricing...")
+    logger.info(f"🌍 Region: {region}")
     logger.info(f"📤 Payload: {payload}")
     
     try:
@@ -158,9 +159,10 @@ def calculate_pricing(inventory_items, region='Cairo'):
         pricing_data = response.json()
         
         logger.info(f"✅ Pricing calculated successfully")
+        logger.info(f"  Region: {pricing_data.get('region', 'Unknown')}")
         logger.info(f"  Subtotal: {pricing_data.get('subtotal', 0)}")
         logger.info(f"  Discount: {pricing_data.get('discount', 0)}")
-        logger.info(f"  Tax: {pricing_data.get('tax', 0)}")
+        logger.info(f"  Tax ({pricing_data.get('tax_rate', 0)}%): {pricing_data.get('tax', 0)}")
         logger.info(f"  Total: {pricing_data.get('total_amount', 0)}")
         
         return True, pricing_data
@@ -243,7 +245,7 @@ def save_order_to_database(customer_id, pricing_data, inventory_items):
             discount_pct = item.get('discount_percentage', 0.0)
             line_total = item.get('line_total')
             
-            logger.info(f"  Item: Product {product_id}, Qty {quantity}, Price {unit_price}, Total {line_total}")
+            logger.info(f"  Item: Product {product_id}, Qty {quantity}, Price {unit_price}, Discount {discount_pct}%, Total {line_total}")
             
             cursor.execute("""
                 INSERT INTO order_items
@@ -322,7 +324,11 @@ def create_order():
             logger.warning(f"❌ Invalid input: {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
         
-        # 3. Check inventory (and fetch prices)
+        # 3. Get region (default to Cairo)
+        region = data.get('region', 'Cairo')
+        logger.info(f"🌍 Order region: {region}")
+        
+        # 4. Check inventory (and fetch prices)
         inventory_success, inventory_result = check_inventory(data['products'])
         if not inventory_success:
             logger.warning(f"❌ Inventory check failed: {inventory_result}")
@@ -332,10 +338,10 @@ def create_order():
                 'stage': 'inventory_check'
             }), 400
         
-        # 4. Calculate pricing
+        # 5. Calculate pricing with region
         pricing_success, pricing_result = calculate_pricing(
             inventory_result,
-            region='Cairo'
+            region=region
         )
         
         if not pricing_success:
@@ -346,7 +352,7 @@ def create_order():
                 'stage': 'pricing_calculation'
             }), 400
         
-        # 5. Save to Database
+        # 6. Save to Database
         save_success, order_id_or_error = save_order_to_database(
             data['customer_id'], 
             pricing_result, 
@@ -361,7 +367,7 @@ def create_order():
                 'stage': 'database_save'
             }), 500
         
-        # 6. Update loyalty points
+        # 7. Update loyalty points
         try:
             total_amount = pricing_result.get('total_amount', 0)
             points_to_add = int(total_amount / 10)  # 1 point per 10 EGP
@@ -380,7 +386,7 @@ def create_order():
         except Exception as e:
             logger.warning(f"⚠️ Loyalty points update failed: {e}")
         
-        # 7. Send notification
+        # 8. Send notification
         try:
             notification_response = requests.post(
                 f"{NOTIFICATION_SERVICE_URL}/api/notifications/send",
@@ -398,13 +404,14 @@ def create_order():
         except Exception as e:
             logger.warning(f"⚠️ Notification sending failed: {e}")
         
-        # 8. Prepare final response
+        # 9. Prepare final response
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         response_data = {
             'success': True,
             'order_id': order_id_or_error,
             'customer_id': data['customer_id'],
+            'region': region,
             'products': inventory_result,
             'pricing': pricing_result,
             'timestamp': timestamp,
@@ -492,6 +499,40 @@ def health_check():
         'service': 'Order Service',
         'port': 5001
     }), 200
+
+# ============================================================
+# Get Regions Endpoint (for dropdown)
+# ============================================================
+
+@app.route('/api/regions', methods=['GET'])
+def get_regions():
+    """Get all available regions with their tax rates"""
+    logger.info("🌍 GET /api/regions - Fetching regions from DB")
+    
+    try:
+        # Forward request to Pricing Service
+        response = requests.get(
+            f"{PRICING_SERVICE_URL}/api/pricing/regions",
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            regions_data = response.json()
+            logger.info(f"✅ Found {regions_data.get('total_regions', 0)} regions")
+            return jsonify(regions_data), 200
+        else:
+            logger.error(f"❌ Pricing service error: {response.status_code}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to fetch regions'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Error fetching regions: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ============================================================
 # Run Service
